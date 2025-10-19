@@ -1,0 +1,306 @@
+[index.html](https://github.com/user-attachments/files/22989064/index.html)
+<!--
+Class 9 Social (CBSE) Quiz - Single-file website
+How to use:
+1. Save this file as `class9_social_quiz.html` on your computer.
+2. Open it in a browser (double-click). No server required.
+3. To add questions: edit the `questions` array below. Group questions by `chapter`.
+4. Optional: host on GitHub Pages by pushing this file to a repo's `gh-pages` branch or using the repository settings (simple single-file site).
+
+Features included:
+- Chapter selection (supports many chapters)
+- Multiple-choice questions (MCQ) and optional short answer review
+- Timer per quiz or per question
+- Score, review answers, and retry
+- Admin area to add/export/import questions (uses localStorage)
+- Responsive and simple design (Tailwind-like utility classes are used as plain CSS here)
+
+NOTE: This file includes example questions for chapters 1-3 only. Add more questions following the same format.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Class 9 Social — Quiz</title>
+  <style>
+    /* Minimal, modern styles */
+    :root{--bg:#f7fafc;--card:#ffffff;--accent:#0b6cf0;--muted:#6b7280}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg);margin:0;padding:24px;color:#0f172a}
+    .container{max-width:960px;margin:0 auto}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 8px 24px rgba(15,23,42,0.06);}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    select,input,button,textarea{font-family:inherit}
+    .controls{display:flex;gap:8px;align-items:center}
+    button{background:var(--accent);color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,108,240,0.12)}
+    .muted{color:var(--muted);font-size:14px}
+    .question{margin-top:16px}
+    .options{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    .option{padding:10px;border-radius:8px;border:1px solid #e6e9ef;cursor:pointer}
+    .option.selected{border-color:var(--accent);background:rgba(11,108,240,0.06)}
+    .option.correct{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.3)}
+    .option.wrong{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2)}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+    .stats{display:flex;gap:12px;align-items:center}
+    .admin{margin-top:14px;border-top:1px dashed #e6e6e6;padding-top:14px}
+    .small{font-size:13px}
+    @media (max-width:600px){body{padding:12px}.controls{flex-direction:column;align-items:stretch}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Class 9 Social — CBSE Quiz</h1>
+        <div class="muted">Practice MCQs, track score, and review answers</div>
+      </div>
+      <div class="controls">
+        <label class="small muted">Mode:</label>
+        <select id="modeSelect">
+          <option value="chapter">Choose Chapter</option>
+          <option value="mixed">Mixed (All Chapters)</option>
+        </select>
+      </div>
+    </header>
+
+    <div class="card">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <label class="small muted">Chapter:</label>
+        <select id="chapterSelect"></select>
+        <label class="small muted">Questions:</label>
+        <input id="numQ" type="number" min="1" max="50" value="10" style="width:72px;padding:6px;border-radius:8px;border:1px solid #e6e9ef" />
+        <label class="small muted">Timer (mins):</label>
+        <input id="timerMins" type="number" min="0" max="120" value="0" style="width:72px;padding:6px;border-radius:8px;border:1px solid #e6e9ef" />
+        <button id="startBtn">Start Quiz</button>
+        <button id="resetBtn" class="ghost">Reset Progress</button>
+      </div>
+
+      <div id="quizArea" style="margin-top:18px"></div>
+
+      <div class="admin card" id="adminArea">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Admin — Add / Export Questions</strong>
+            <div class="muted small">Use this to add questions for any chapter. Saved in browser storage.</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="exportBtn" class="ghost">Export JSON</button>
+            <button id="importBtn" class="ghost">Import JSON</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:grid;gap:8px">
+          <input id="qChapter" placeholder="Chapter name (e.g. Chapter 1: The French Revolution)" />
+          <textarea id="qText" rows="3" placeholder="Question text"></textarea>
+          <input id="optA" placeholder="Option A" />
+          <input id="optB" placeholder="Option B" />
+          <input id="optC" placeholder="Option C (optional)" />
+          <input id="optD" placeholder="Option D (optional)" />
+          <label class="small muted">Correct option (a/b/c/d):</label>
+          <input id="correctOpt" style="width:72px;padding:6px;border-radius:8px;border:1px solid #e6e9ef" />
+          <div style="display:flex;gap:8px">
+            <button id="addQBtn">Add Question</button>
+            <button id="clearQsBtn" class="ghost">Clear All Questions</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer style="margin-top:12px;text-align:center;color:var(--muted);font-size:13px">
+      Built for your Robotics & AI class — customize questions as needed.
+    </footer>
+  </div>
+
+  <script>
+    // -------------------------
+    // Sample question bank (example only). Add more questions following this shape.
+    // chapter should be a short identifier string. Keep consistent when adding more questions.
+    // -------------------------
+    const SAMPLE_QUESTIONS = [
+      {id:1, chapter:'Chapter 1: The French Revolution', type:'mcq', q:'When did the French Revolution begin?', options:{a:'1789', b:'1776', c:'1815', d:'1804'}, answer:'a'},
+      {id:2, chapter:'Chapter 1: The French Revolution', type:'mcq', q:'Who stormed the Bastille?', options:{a:'Peasants', b:'City mob of Paris', c:'Nobles', d:'Foreign army'}, answer:'b'},
+      {id:3, chapter:'Chapter 2: Socialism', type:'mcq', q:'Which thinker is associated with scientific socialism?', options:{a:'Karl Marx', b:'John Locke', c:'Adam Smith', d:'Hobbes'}, answer:'a'},
+      {id:4, chapter:'Chapter 3: Indian National Movement', type:'mcq', q:'Which session of the Indian National Congress demanded Purna Swaraj?', options:{a:'Lahore, 1929', b:'Calcutta, 1906', c:'Lucknow, 1916', d:'Bombay, 1885'}, answer:'a'}
+    ];
+
+    // -------------------------
+    // Utilities: storage & id
+    // -------------------------
+    const STORAGE_KEY = 'class9_social_questions_v1';
+    function loadQuestions(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){ localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_QUESTIONS)); return SAMPLE_QUESTIONS.slice(); }
+      try{ return JSON.parse(raw); }catch(e){ localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_QUESTIONS)); return SAMPLE_QUESTIONS.slice(); }
+    }
+    function saveQuestions(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+    let questions = loadQuestions();
+
+    // -------------------------
+    // Populate chapter select
+    // -------------------------
+    const chapterSelect = document.getElementById('chapterSelect');
+    const modeSelect = document.getElementById('modeSelect');
+    function refreshChapters(){
+      const chapters = Array.from(new Set(questions.map(q=>q.chapter))).sort();
+      chapterSelect.innerHTML = '';
+      chapters.forEach(ch=>{ const o=document.createElement('option'); o.value=ch; o.textContent=ch; chapterSelect.appendChild(o); });
+      if(chapters.length===0){ const o=document.createElement('option'); o.textContent='(no chapters yet)'; chapterSelect.appendChild(o); }
+    }
+    refreshChapters();
+
+    // -------------------------
+    // Quiz runtime state
+    // -------------------------
+    let currentQuiz = null; // {questions:[], index, answers:[], startTime, timer}
+
+    // UI elements
+    const quizArea = document.getElementById('quizArea');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const numQ = document.getElementById('numQ');
+    const timerMins = document.getElementById('timerMins');
+
+    startBtn.addEventListener('click', ()=>{
+      const mode = modeSelect.value;
+      const chapter = chapterSelect.value;
+      const count = Math.max(1, Math.min(50, parseInt(numQ.value)||10));
+      let pool = (mode==='mixed')? questions.slice() : questions.filter(q=>q.chapter===chapter);
+      if(pool.length===0){ quizArea.innerHTML = '<div class="muted">No questions available for this selection. Add questions in Admin below.</div>'; return; }
+      // shuffle and pick
+      pool = shuffle(pool).slice(0,count);
+      currentQuiz = {questions:pool, index:0, answers:Array(pool.length).fill(null), startTime:Date.now(), duration: (parseInt(timerMins.value)||0)*60 }
+      renderQuestion();
+      if(currentQuiz.duration>0){ startCountdown(currentQuiz.duration); }
+    });
+
+    resetBtn.addEventListener('click', ()=>{ if(confirm('Clear saved questions and reset to sample questions?')){ localStorage.removeItem(STORAGE_KEY); questions=loadQuestions(); refreshChapters(); quizArea.innerHTML=''; alert('Reset done.'); } });
+
+    function renderQuestion(){
+      const i = currentQuiz.index;
+      const item = currentQuiz.questions[i];
+      quizArea.innerHTML = '';
+      const qBox = document.createElement('div');
+      qBox.className='question';
+      qBox.innerHTML = `<div class="muted small">${item.chapter} — Question ${i+1} of ${currentQuiz.questions.length}</div><h3 style="margin:6px 0">${item.q}</h3>`;
+      const opts = document.createElement('div'); opts.className='options';
+      ['a','b','c','d'].forEach(key=>{
+        if(!item.options[key]) return;
+        const opt = document.createElement('div'); opt.className='option'; opt.dataset.key=key; opt.innerHTML = `<strong>${key.toUpperCase()}.</strong> ${item.options[key]}`;
+        if(currentQuiz.answers[i]===key) opt.classList.add('selected');
+        opt.addEventListener('click', ()=>{ currentQuiz.answers[i]=key; renderQuestion(); });
+        opts.appendChild(opt);
+      });
+      qBox.appendChild(opts);
+
+      // controls
+      const footer = document.createElement('div'); footer.className='footer';
+      const nav = document.createElement('div'); nav.style.display='flex'; nav.style.gap='8px';
+      const prev = document.createElement('button'); prev.textContent='Previous'; prev.className='ghost'; prev.disabled = (i===0); prev.addEventListener('click', ()=>{ currentQuiz.index=Math.max(0,i-1); renderQuestion(); });
+      const next = document.createElement('button'); next.textContent = (i===currentQuiz.questions.length-1)?'Finish':'Next'; next.addEventListener('click', ()=>{ if(i===currentQuiz.questions.length-1){ finishQuiz(); } else { currentQuiz.index=Math.min(currentQuiz.questions.length-1,i+1); renderQuestion(); } });
+      nav.appendChild(prev); nav.appendChild(next);
+      footer.appendChild(nav);
+
+      const stats = document.createElement('div'); stats.className='stats';
+      const answered = currentQuiz.answers.filter(a=>a!==null).length;
+      const remaining = currentQuiz.questions.length - answered;
+      stats.innerHTML = `<div class="small muted">Answered: ${answered}</div><div class="small muted">Remaining: ${remaining}</div><div id="timerDisplay" class="small muted"></div>`;
+      footer.appendChild(stats);
+
+      qBox.appendChild(footer);
+      quizArea.appendChild(qBox);
+    }
+
+    function finishQuiz(){
+      // score
+      let score = 0; const total = currentQuiz.questions.length;
+      const review = [];
+      currentQuiz.questions.forEach((q,idx)=>{
+        const user = currentQuiz.answers[idx];
+        const correct = q.answer;
+        if(user===correct) score++;
+        review.push({q:q.q, chapter:q.chapter, user, correct, options:q.options});
+      });
+      // show results
+      quizArea.innerHTML = '';
+      const res = document.createElement('div'); res.innerHTML = `<h2>Results</h2><div class="muted">Score: <strong>${score}</strong> / ${total}</div>`;
+      const reviewBtn = document.createElement('button'); reviewBtn.textContent='Review Answers'; reviewBtn.className='ghost'; reviewBtn.addEventListener('click', ()=>{ renderReview(review); });
+      const retryBtn = document.createElement('button'); retryBtn.textContent='Retry Quiz'; retryBtn.addEventListener('click', ()=>{ currentQuiz.answers = Array(total).fill(null); currentQuiz.index=0; renderQuestion(); });
+      res.appendChild(document.createElement('div')).style.marginTop='8px';
+      res.appendChild(reviewBtn); res.appendChild(retryBtn);
+      quizArea.appendChild(res);
+    }
+
+    function renderReview(items){
+      quizArea.innerHTML = '<h2>Review</h2>';
+      items.forEach((it,idx)=>{
+        const card = document.createElement('div'); card.className='card'; card.style.marginTop='10px';
+        let html = `<div class="muted small">${it.chapter} — Q${idx+1}</div><h3 style="margin:4px 0">${it.q}</h3>`;
+        Object.keys(it.options).forEach(k=>{
+          const cls = (k===it.correct)?' option correct':(k===it.user && k!==it.correct)?' option wrong':' option';
+          html += `<div class="${cls}" style="margin-top:6px"><strong>${k.toUpperCase()}.</strong> ${it.options[k]}</div>`;
+        });
+        card.innerHTML=html;
+        quizArea.appendChild(card);
+      });
+    }
+
+    // -------------------------
+    // Timer functions
+    // -------------------------
+    let countdownInterval = null;
+    function startCountdown(seconds){
+      let remaining = seconds;
+      const disp = document.getElementById('timerDisplay');
+      if(countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(()=>{
+        if(remaining<=0){ clearInterval(countdownInterval); alert('Time is up! Finishing the quiz.'); finishQuiz(); return; }
+        remaining--; const mm = Math.floor(remaining/60); const ss = remaining%60; if(disp) disp.textContent = `Time left: ${mm}m ${ss}s`;
+      },1000);
+    }
+
+    // -------------------------
+    // Admin: add/export/import questions
+    // -------------------------
+    document.getElementById('addQBtn').addEventListener('click', ()=>{
+      const ch = document.getElementById('qChapter').value.trim() || 'Unassigned';
+      const qtext = document.getElementById('qText').value.trim();
+      const a = document.getElementById('optA').value.trim();
+      const b = document.getElementById('optB').value.trim();
+      const c = document.getElementById('optC').value.trim();
+      const d = document.getElementById('optD').value.trim();
+      const corr = (document.getElementById('correctOpt').value||'').trim().toLowerCase();
+      if(!qtext || !a || !b || !['a','b','c','d'].includes(corr)){ alert('Please add question, at least two options (A,B) and correct option (a/b/c/d).'); return; }
+      const newId = (questions.reduce((m,x)=>Math.max(m,x.id||0),0)||0)+1;
+      const opts = {a:a,b:b}; if(c) opts.c=c; if(d) opts.d=d;
+      const newQ = {id:newId, chapter:ch, type:'mcq', q:qtext, options:opts, answer:corr};
+      questions.push(newQ); saveQuestions(questions); refreshChapters(); alert('Question added.');
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const data = JSON.stringify(questions, null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='class9_social_questions.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('importBtn').addEventListener('click', ()=>{
+      const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+      inp.onchange = ()=>{
+        const f = inp.files[0]; if(!f) return; const r = new FileReader(); r.onload = e=>{ try{ const arr = JSON.parse(e.target.result); if(Array.isArray(arr)){ questions = arr; saveQuestions(questions); refreshChapters(); alert('Imported questions.'); } else alert('Invalid file format.'); }catch(err){ alert('Error parsing file.'); } }; r.readAsText(f);
+      };
+      inp.click();
+    });
+
+    document.getElementById('clearQsBtn').addEventListener('click', ()=>{ if(confirm('Clear all questions from storage? This cannot be undone.')){ questions=[]; saveQuestions(questions); refreshChapters(); alert('Cleared.'); } });
+
+    // -------------------------
+    // Helpers
+    // -------------------------
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]] } return a; }
+  </script>
+</body>
+</html>
